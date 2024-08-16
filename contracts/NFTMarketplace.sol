@@ -6,14 +6,20 @@ contract NFTMarketplace {
     mapping(address => mapping(uint256 => uint256)) prices;
     mapping(address => mapping(address => uint256)) owners;
 
+    event ListNFT(address indexed owner, address indexed nftAddress, uint256 tokenId);
+
     error NotOwnNFT();
     error NFTNotListed();
+
+    uint256 listingFee;
     function listNFT(
         address nftAddress,
         uint256 tokenId,
         uint256 price
-    ) external {
+    ) external isNFTOwner(nftAddress, tokenId) {
         prices[nftAddress][tokenId] = price;
+        
+        emit ListNFT(msg.sender, nftAddress, tokenId);
     }
 
     function updateListing(
@@ -21,10 +27,10 @@ contract NFTMarketplace {
         uint256 tokenId,
         uint256 price
     ) external {
-        // if not owner of this nft then can't update listing.abi
+        // if not owner of this nft then can't update listing
         IERC1155 nft = IERC1155(nftAddress);
 
-        bool ownNft = nft.balanceOf(nftAddress, tokenId) == 1;
+        bool ownNft = nft.balanceOf(msg.sender, tokenId) == 1;
         if (!ownNft){
             revert NotOwnNFT();
         }
@@ -45,4 +51,19 @@ contract NFTMarketplace {
     function buyItem(address nftAddress, uint256 tokenId) external payable {}
 
     function setPurchaseToken(address token) external {}
+
+    modifier isNFTOwner(address nftAddress, uint256 tokenId){
+          // if not owner of this nft then can't update listing
+        IERC1155 nft = IERC1155(nftAddress);
+
+        bool ownNft = nft.balanceOf(msg.sender, tokenId) == 1;
+        if (!ownNft){
+            revert NotOwnNFT();
+        }
+        _;
+    }
+
 }
+
+
+
