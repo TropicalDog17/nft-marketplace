@@ -20,7 +20,14 @@ contract NFTMarketplace is Ownable(msg.sender) {
     error NotOwnNFT();
     error NFTNotListed();
 
-    uint256 listingFee;
+    string public name;
+
+    uint16 public feeRatio;
+
+    constructor(string memory _name, uint16 _feeRatio) {
+        name = _name;
+        feeRatio = _feeRatio;
+    }
 
     function listNFT(address nftAddress, uint256 tokenId, uint256 price) external isNFTOwner(nftAddress, tokenId) {
         prices[nftAddress][tokenId] = price;
@@ -79,6 +86,9 @@ contract NFTMarketplace is Ownable(msg.sender) {
         return prices[nftAddress][tokenId];
     }
 
+    /**
+     * @dev allowance should be greater or equals to nft price;
+     */
     function buyItem(address nftAddress, uint256 tokenId, address paymentToken)
         external
         payable
@@ -88,8 +98,7 @@ contract NFTMarketplace is Ownable(msg.sender) {
         IERC1155 _nft = IERC1155(nftAddress);
         uint256 nftPrice = _getListingPrice(nftAddress, tokenId);
 
-        // Approve the contract to spend ERC20 amount first.
-        require(_token.approve(address(this), nftPrice));
+        // require(_token.approve(address(this), nftPrice));
 
         // transfer the nft to buyer
         address nftOwner = getNFTOwner(nftAddress, tokenId);
@@ -121,12 +130,29 @@ contract NFTMarketplace is Ownable(msg.sender) {
         owners[nftAddress][tokenId] = _to;
     }
 
-    function addPurchaseToken(address token) external onlyOwner {
-        acceptedErc20[token] = true;
+    /**
+     * @dev add a token to the list of supported tokens.
+     */
+    function addPurchaseToken(address _token) external onlyOwner isERC20(_token) {
+        acceptedErc20[_token] = true;
     }
 
-    function setListingFee(uint8 _listingFee) external onlyOwner {
-        listingFee = _listingFee;
+    /**
+     * check if an ERC20 token is supported in this marketplace
+     */
+    function isSupportedERC20(address _token) external view isERC20(_token) returns (bool) {
+        return acceptedErc20[_token];
+    }
+
+    /**
+     * @dev remove a token from the list of supported tokens
+     */
+    function removePurchaseToken(address _token) external {
+        acceptedErc20[_token] = false;
+    }
+
+    function setFeeRatio(uint8 _feeRatio) external onlyOwner {
+        feeRatio = _feeRatio;
     }
 
     modifier isNFTOwner(address nftAddress, uint256 tokenId) {
@@ -149,6 +175,17 @@ contract NFTMarketplace is Ownable(msg.sender) {
 
     modifier acceptedToken(address erc20Token) {
         require(acceptedErc20[erc20Token] == true);
+        _;
+    }
+
+    /**
+     * @dev     sanity check for ERC20
+     */
+    modifier isERC20(address _token) {
+        IERC20 token = IERC20(_token);
+        if (IERC20(token).balanceOf(address(this)) < 0) {
+            revert("Address is not an erc20 token");
+        }
         _;
     }
 }
