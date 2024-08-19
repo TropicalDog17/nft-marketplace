@@ -25,6 +25,7 @@ contract NFTMarketplace is Ownable(msg.sender) {
     error CannotBuyOwnNFT();
     error NFTAlreadyListed();
     error ZeroPriceNotAllowed();
+    error NoFeeToWithdraw();
 
     string public name;
 
@@ -120,7 +121,10 @@ contract NFTMarketplace is Ownable(msg.sender) {
         _nft.safeTransferFrom(nftOwner, msg.sender, tokenId, 1, "");
 
         // send the erc20 to seller
-        _token.transferFrom(msg.sender, nftOwner, nftPrice);
+        uint256 feeAmount = nftPrice * feeRatio / 100;
+        uint256 afterFeeDeductedAmount = nftPrice - feeAmount;
+        _token.transferFrom(msg.sender, nftOwner, afterFeeDeductedAmount);
+        _token.transferFrom(msg.sender, address(this), feeAmount);
 
         // update the mapping on contract
         _transferNFTOwnership(msg.sender, nftAddress, tokenId);
@@ -171,6 +175,19 @@ contract NFTMarketplace is Ownable(msg.sender) {
 
     function setFeeRatio(uint8 _feeRatio) external onlyOwner {
         feeRatio = _feeRatio;
+    }
+
+    /**
+     * @dev withdraw choosen token to the owner address
+     */
+    function WithdrawFees(address _token) external onlyOwner {
+        IERC20 token = IERC20(_token);
+        address owner = this.owner();
+        uint256 amount = token.balanceOf(address(this));
+        if (amount == 0) {
+            revert NoFeeToWithdraw();
+        }
+        token.transfer(owner, amount);
     }
 
     modifier isNFTOwner(address nftAddress, uint256 tokenId) {

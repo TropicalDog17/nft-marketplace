@@ -166,14 +166,16 @@ describe('NFT Marketplace', function () {
     });
 
     it('Other buy one nft from owner', async () => {
-      const { marketplace, myERC1155, myERC20, owner, otherAccount } = await loadFixture(deploy);
+      const { feeRatio, marketplace, myERC1155, myERC20, owner, otherAccount } = await loadFixture(deploy);
 
       const nftPrice = await marketplace.getListingPrice(await myERC1155.getAddress(), ownerNftIDs[0]);
+      const nftPriceInt = parseInt(nftPrice.toString());
+      const feeAmount = (nftPriceInt * feeRatio) / 100;
 
       // owner buy one nft from another
 
       // allow the contract to access the token and nft
-      await myERC20.connect(otherAccount).approve(await marketplace.getAddress(), nftPrice);
+      await myERC20.connect(otherAccount).approve(await marketplace.getAddress(), nftPriceInt);
       await myERC1155.setApprovalForAll(await marketplace.getAddress(), true);
 
       await expect(
@@ -182,7 +184,7 @@ describe('NFT Marketplace', function () {
           .buyItem(await myERC1155.getAddress(), ownerNftIDs[0], await myERC20.getAddress())
       )
         .to.emit(marketplace, 'BuyNFT')
-        .withArgs(otherAccount.address, owner.address, await myERC1155.getAddress(), ownerNftIDs[0], nftPrice);
+        .withArgs(otherAccount.address, owner.address, await myERC1155.getAddress(), ownerNftIDs[0], nftPriceInt);
 
       // then
       expect(await marketplace.getNFTOwner(await myERC1155.getAddress(), ownerNftIDs[0])).to.equals(
@@ -210,9 +212,12 @@ describe('NFT Marketplace', function () {
     });
 
     it('Balance deduction and addition should be correct', async () => {
-      const { marketplace, myERC1155, myERC20, owner, otherAccount } = await loadFixture(deploy);
+      const { feeRatio, marketplace, myERC1155, myERC20, owner, otherAccount } = await loadFixture(deploy);
 
       const nftPrice = await marketplace.getListingPrice(await myERC1155.getAddress(), ownerNftIDs[0]);
+      const nftPriceInt = parseInt(nftPrice.toString());
+      const feeAmount = (nftPriceInt * feeRatio) / 100;
+
       // owner buy one nft from another
 
       // allow the contract to access the token and nft
@@ -223,7 +228,11 @@ describe('NFT Marketplace', function () {
         await marketplace
           .connect(otherAccount)
           .buyItem(await myERC1155.getAddress(), ownerNftIDs[0], await myERC20.getAddress())
-      ).to.changeTokenBalances(myERC20, [owner, otherAccount], [nftPrice, -nftPrice]);
+      ).to.changeTokenBalances(
+        myERC20,
+        [owner, otherAccount, marketplace],
+        [nftPriceInt - feeAmount, -nftPrice, feeAmount]
+      );
     });
     it('Should reject non-whitelisted token', async () => {
       const { marketplace, myERC1155, someRandomErc20, owner, otherAccount } = await loadFixture(deploy);
@@ -268,6 +277,48 @@ describe('NFT Marketplace', function () {
           .connect(otherAccount)
           .buyItem(await myERC1155.getAddress(), ownerNftIDs[0], await myERC20.getAddress())
       ).to.be.revertedWithCustomError(myERC20, 'ERC20InsufficientBalance');
+    });
+  });
+
+  describe('Marketplace fees', () => {
+    it('Should allow owner to withdraw collected fees', async () => {
+      const { marketplace, myERC1155, myERC20, owner, otherAccount } = await loadFixture(deploy);
+
+      const nftPrice = await marketplace.getListingPrice(await myERC1155.getAddress(), ownerNftIDs[0]);
+
+      await myERC20.connect(otherAccount).approve(await marketplace.getAddress(), nftPrice);
+      await myERC1155.setApprovalForAll(await marketplace.getAddress(), true);
+
+      await marketplace
+        .connect(otherAccount)
+        .buyItem(await myERC1155.getAddress(), ownerNftIDs[0], await myERC20.getAddress());
+
+      const feeBalance = await myERC20.balanceOf(await marketplace.getAddress());
+
+      await expect(marketplace.WithdrawFees(await myERC20.getAddress())).to.changeTokenBalances(
+        myERC20,
+        [marketplace, owner],
+        [-feeBalance, feeBalance]
+      );
+    });
+
+    it('Should not be able to zero balance fee token', async () => {
+      const { marketplace, myERC1155, myERC20, someRandomErc20, otherAccount } = await loadFixture(deploy);
+
+      const nftPrice = await marketplace.getListingPrice(await myERC1155.getAddress(), ownerNftIDs[0]);
+
+      await myERC20.connect(otherAccount).approve(await marketplace.getAddress(), nftPrice);
+      await myERC1155.setApprovalForAll(await marketplace.getAddress(), true);
+
+      await marketplace
+        .connect(otherAccount)
+        .buyItem(await myERC1155.getAddress(), ownerNftIDs[0], await myERC20.getAddress());
+
+      await expect(marketplace.WithdrawFees(await myERC20.getAddress())).to.not.reverted;
+      await expect(marketplace.WithdrawFees(await someRandomErc20.getAddress())).to.be.revertedWithCustomError(
+        marketplace,
+        'NoFeeToWithdraw'
+      );
     });
   });
 });
