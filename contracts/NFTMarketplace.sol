@@ -16,20 +16,33 @@ contract NFTMarketplace is Ownable(msg.sender) {
     );
     event UpdateListing(address indexed owner, address indexed nftAddress, uint256 tokenId, uint256 price);
     event CancelListing(address indexed owner, address indexed nftAddress, uint256 tokenId);
+    event WhitelistToken(address indexed token);
+    event UnWhitelistToken(address indexed token);
 
     error NotOwnNFT();
     error NFTNotListed();
+    error NotSupportedToken();
+    error CannotBuyOwnNFT();
+    error NFTAlreadyListed();
+    error ZeroPriceNotAllowed();
 
     string public name;
 
     uint16 public feeRatio;
 
-    constructor(string memory _name, uint16 _feeRatio) {
+    constructor(string memory _name, uint16 _feeRatio, address _erc20Token) {
         name = _name;
         feeRatio = _feeRatio;
+        acceptedErc20[_erc20Token] = true;
     }
 
     function listNFT(address nftAddress, uint256 tokenId, uint256 price) external isNFTOwner(nftAddress, tokenId) {
+        if (prices[nftAddress][tokenId] != 0) {
+            revert NFTAlreadyListed();
+        }
+        if (price == 0) {
+            revert ZeroPriceNotAllowed();
+        }
         prices[nftAddress][tokenId] = price;
         owners[nftAddress][tokenId] = msg.sender;
         emit ListNFT(msg.sender, nftAddress, tokenId, price);
@@ -93,15 +106,17 @@ contract NFTMarketplace is Ownable(msg.sender) {
         external
         payable
         listedNFT(nftAddress, tokenId)
+        acceptedToken(paymentToken)
     {
         IERC20 _token = IERC20(paymentToken);
         IERC1155 _nft = IERC1155(nftAddress);
         uint256 nftPrice = _getListingPrice(nftAddress, tokenId);
 
-        // require(_token.approve(address(this), nftPrice));
-
-        // transfer the nft to buyer
         address nftOwner = getNFTOwner(nftAddress, tokenId);
+        if (msg.sender == nftOwner) {
+            revert CannotBuyOwnNFT();
+        }
+        // transfer the nft to buyer
         _nft.safeTransferFrom(nftOwner, msg.sender, tokenId, 1, "");
 
         // send the erc20 to seller
@@ -133,8 +148,10 @@ contract NFTMarketplace is Ownable(msg.sender) {
     /**
      * @dev add a token to the list of supported tokens.
      */
-    function addPurchaseToken(address _token) external onlyOwner isERC20(_token) {
+    function AddTokenToWhitelist(address _token) external onlyOwner isERC20(_token) {
         acceptedErc20[_token] = true;
+
+        emit WhitelistToken(_token);
     }
 
     /**
@@ -147,8 +164,9 @@ contract NFTMarketplace is Ownable(msg.sender) {
     /**
      * @dev remove a token from the list of supported tokens
      */
-    function removePurchaseToken(address _token) external {
+    function RemoveFromWhitelist(address _token) external {
         acceptedErc20[_token] = false;
+        emit UnWhitelistToken(_token);
     }
 
     function setFeeRatio(uint8 _feeRatio) external onlyOwner {
@@ -174,7 +192,9 @@ contract NFTMarketplace is Ownable(msg.sender) {
     }
 
     modifier acceptedToken(address erc20Token) {
-        require(acceptedErc20[erc20Token] == true);
+        if (acceptedErc20[erc20Token] != true) {
+            revert NotSupportedToken();
+        }
         _;
     }
 
