@@ -4,8 +4,9 @@ pragma solidity 0.8.24;
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract NFTMarketplace is Ownable(msg.sender) {
+contract NFTMarketplace is Ownable(msg.sender), Initializable {
     mapping(address => mapping(uint256 => uint256)) prices;
     mapping(address => mapping(uint256 => address)) owners;
     mapping(address => bool) acceptedErc20;
@@ -31,7 +32,7 @@ contract NFTMarketplace is Ownable(msg.sender) {
 
     uint16 public feeRatio;
 
-    constructor(string memory _name, uint16 _feeRatio, address _erc20Token) {
+    function initialize(string memory _name, uint16 _feeRatio, address _erc20Token) public initializer {
         name = _name;
         feeRatio = _feeRatio;
         acceptedErc20[_erc20Token] = true;

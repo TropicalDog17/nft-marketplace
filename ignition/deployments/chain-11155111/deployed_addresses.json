@@ -1,0 +1,7 @@
+{
+  "ProxyModule#NFTMarketplace": "0x8db3ff0c2fbEB2A199B87b6cD61c90DDbc1CdFEd",
+  "ProxyModule#TransparentUpgradeableProxy": "0x09072c37487e8E1062f6C52afA5c01275d1952Ef",
+  "ProxyModule#ProxyAdmin": "0xBEA91e663263e66885611f10546a6ddA6c04954A",
+  "DemoModule#NFTMarketplace": "0x09072c37487e8E1062f6C52afA5c01275d1952Ef",
+  "UpgradeModule#NFTMarketplaceV2": "0xC68F51c330De51D7eB5Cfd298d1202862F06955D"
+}
